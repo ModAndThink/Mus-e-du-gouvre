@@ -1,0 +1,326 @@
+<!DOCTYPE html>
+<html>
+	<head></head>
+	<body>
+		<canvas width = 1200 height = 560></canvas>
+		
+		<script>
+			let wall = null
+			var map = []
+			let camera_pos = [3,4]
+			let camera_direction = 0
+			var FOV = 65
+			var ray_length = 12
+			var resolution = 1200
+			var sensibility = 2
+			var radius = 5
+			
+			var canvas = document.querySelector('canvas');
+			var ctx = canvas.getContext('2d');
+			let imageLoad = []
+			
+			var z_press = false
+			var s_press = false
+			var d_press = false
+			var q_press = false
+			
+			var p = null
+			
+			window.onload = init
+			
+			class prop {
+				constructor (x,y,texture) {
+					this.texture = texture
+					this.position = [x,y]
+					this.size = [200,200]
+					
+					this.drawn = function drawn(ds) {
+						var rotatedPos = rotateZ(this.position[0]-camera_pos[0],this.position[1]-camera_pos[1],-camera_direction)
+						var screen_pos = [rotatedPos[0]*(ds/rotatedPos[1]),0]
+						return [this.texture,screen_pos[0]]
+					}
+				}
+			}
+			
+			function drawnRectangle(color,x,y,xLength,yLength) {
+				ctx.fillStyle = 'rgb('+(color[0])+","+(color[1])+","+(color[2])+")"
+				ctx.fillRect(x,y,xLength,yLength);
+			}
+			
+			function radians(degrees) {
+				return (Math.PI/180) * degrees
+			}
+			
+			function rotateZ(x,y,angle) {
+				var cos = Math.cos(radians(-angle))
+				var sin = Math.sin(radians(-angle))
+				
+				var xN = x*cos - y*sin
+				var yN = y*cos + x*sin
+				
+				return [xN,yN]
+			}
+			
+			function ray(direction,position,angle) {
+				var Step = [0,0]
+				var rayLength = [0,0]
+				var currenCell = [parseInt(position[0]),parseInt(position[1])]
+				var unitStep = [Math.sqrt(1+(direction[1]/direction[0])**2),Math.sqrt(1+(direction[0]/direction[1])**2)]
+				var hit = false
+				var mapCheck = [parseInt(position[0]),parseInt(position[1])]
+				var distance = 0
+				var side = 0
+				var offset = []
+				var hypotenus = Math.sqrt(direction[0]**2+direction[1]**2)
+				
+				for (i=0;i<2;i++) {
+					if (direction[i]<0) {
+						Step[i] = -1
+						rayLength[i] = (position[i]-currenCell[i])*unitStep[i]
+					}
+					else {
+						Step[i] = 1
+						rayLength[i] = ((currenCell[i]+1)-position[i])*unitStep[i]
+					}
+				}
+				
+				while (hit!=true && distance<ray_length) {
+					if (rayLength[0]<rayLength[1]) {
+						mapCheck[0]+=Step[0]
+						distance = rayLength[0]
+						rayLength[0] += unitStep[0]
+						side = 0
+						offset = ((direction[1]*distance)/hypotenus)-(mapCheck[1]-position[1])
+					}
+					else {
+						mapCheck[1]+=Step[1]
+						distance = rayLength[1]
+						rayLength[1] += unitStep[1]
+						side = 1
+						offset = ((direction[0]*distance)/hypotenus)-(mapCheck[0]-position[0])
+					}
+					
+					try {
+						if (map[mapCheck[1]][mapCheck[0]][0] == 1) {
+							hit =true
+						}
+					}
+					catch {}
+				}
+				if (hit == true) {
+					return [map[mapCheck[1]][mapCheck[0]],distance*Math.cos(radians(angle)),side,offset]
+				}
+				else {
+					return null
+				}
+			}
+			
+			function gameLoop() {
+				if (FOV!=0) {
+					ctx.fillStyle = 'rgb(196,199,201)';
+					ctx.fillRect(0, 0,canvas.width, canvas.height);
+					
+					ctx.fillStyle = 'rgb(200,195,40)';
+					ctx.fillRect(0, canvas.height/2,canvas.width, canvas.height/2);
+					
+					var forbidenZone = Array(resolution).fill([0,0])
+					
+					var distanceToScreen = Math.tan(radians(FOV/2))
+					var increment = 1/resolution
+					
+					var Xs = 1/-2
+					for (var xB = 0;xB <= resolution;xB++) {
+						//console.log("============================")
+						distance = Math.sqrt(Xs**2+distanceToScreen**2)
+						hit_info = ray(rotateZ(Xs,distanceToScreen,camera_direction),camera_pos,FOV*Xs)
+						//console.log(hit_info)
+						if (hit_info != null) {
+							cursor = parseInt(hit_info[3]*hit_info[0][1].width)
+							ctx.drawImage(hit_info[0][1],cursor,0,1,hit_info[0][1].height,xB*(canvas.width/resolution),(canvas.height-canvas.height/hit_info[1])/2,canvas.width/resolution,canvas.height/hit_info[1])
+							forbidenZone[xB] = [1,hit_info[1]]
+						}
+						Xs+=increment
+					}
+					
+				}
+				
+				if (z_press) {
+					new_pos = [Math.cos(radians(camera_direction))*0.1,Math.sin(radians(camera_direction))*0.1]
+					
+					if (map[~~(camera_pos[1])][~~(camera_pos[0]+new_pos[1]*radius)]==0) {
+						camera_pos[0]+=Math.sin(radians(camera_direction))*0.06
+					}
+					else {
+						wall_url = map[~~(camera_pos[1])][~~(camera_pos[0]+new_pos[1]*radius)][2]
+						wall_image = map[~~(camera_pos[1])][~~(camera_pos[0]+new_pos[1]*radius)][3]
+						if (wall_image=="door") {
+							console.log(wall_url)
+							document.location.href = wall_url,true;
+						}
+					}
+					
+					if (map[~~(camera_pos[1]+new_pos[0]*radius)][~~(camera_pos[0])]==0) {
+						camera_pos[1]+=Math.cos(radians(camera_direction))*0.06
+					}
+					else {
+						wall_url = map[~~(camera_pos[1]+new_pos[0]*radius)][~~(camera_pos[0])][2]
+						wall_image = map[~~(camera_pos[1]+new_pos[0]*radius)][~~(camera_pos[0])][3]
+						if (wall_image=="door") {
+							console.log(wall_url)
+							document.location.href = wall_url,true;
+						}
+					}
+				}
+				if (s_press) {
+					new_pos = [Math.cos(radians(camera_direction))*0.1,Math.sin(radians(camera_direction))*0.1]
+					
+					if (map[~~(camera_pos[1]-new_pos[0]*radius)][~~(camera_pos[0])]==0) {
+						camera_pos[1]-=Math.cos(radians(camera_direction))*0.06
+					}
+					else {
+						console.log("e")
+						wall_url = map[~~(camera_pos[1]-new_pos[0]*radius)][~~(camera_pos[0])][2]
+						wall_image = map[~~(camera_pos[1]-new_pos[0]*radius)][~~(camera_pos[0])][3]
+						if (wall_image=="door") {
+							document.location.href = wall_url,true;
+						}
+					}
+					
+					if (map[~~(camera_pos[1])][~~(camera_pos[0]-new_pos[1]*radius)]==0) {
+						camera_pos[0]-=Math.sin(radians(camera_direction))*0.06
+					}
+					else {
+						console.log("e")
+						wall_url = map[~~(camera_pos[1])][~~(camera_pos[0]-new_pos[1]*radius)][2]
+						wall_image = map[~~(camera_pos[1])][~~(camera_pos[0]-new_pos[1]*radius)][3]
+						if (wall_image=="door") {
+							document.location.href = wall_url,true;
+						}
+					}
+				}
+				if (q_press) {
+					camera_direction-=sensibility
+				}
+				if (d_press) {
+					camera_direction+=sensibility
+				}
+				window.requestAnimationFrame(gameLoop)
+			}
+			
+			function init() {
+				ctx.imageSmoothingEnabled = false;
+				
+				document.addEventListener("keydown", function(event) {
+					if (event.keyCode == 90) {
+						z_press = true;
+					};
+					if (event.keyCode == 83) {
+						s_press = true;
+					};
+					if (event.keyCode == 81) {
+						q_press = true;
+					};
+					if (event.keyCode == 68) {
+						d_press = true;
+					};
+					if (event.keyCode == 32) {
+						space_press = true
+					}
+					if (event.keyCode == 17) {
+						ctrl_press = true
+					}
+					if (event.keyCode == 79) {
+						canvas.requestPointerLock();
+					}
+				}
+				);
+				document.addEventListener("keyup", function(event) {
+					if (event.keyCode == 90) {
+						z_press = false;
+					};
+					if (event.keyCode == 83) {
+						s_press = false;
+					};
+					
+					if (event.keyCode == 81) {
+						q_press = false;
+					};
+					if (event.keyCode == 68) {
+						d_press = false;
+					};
+					if (event.keyCode == 32) {
+						space_press = false
+					}
+					if (event.keyCode == 17) {
+						ctrl_press = false
+					}
+				}
+				);
+				
+				const imageToLoad = [
+					"image/basicWall.png",
+					"image/bricks.png",
+					"image/brickVine.png",
+					"image/tree.png",
+					"image/chocolatPot.png",
+					"image/tree_prop.png",
+					"image/hide-the-pain-harold-meme.png",
+					"image/invref.png",
+					"image/ufo.PNG",
+					"image/GottaCaulSaul.jfif",
+					"image/cad.jfif",
+					"image/chad.jfif",
+					"image/ww.jfif",
+					"image/wallDoorL.png",
+					"image/wallDoorR.png",
+					"image/hozed.png"
+				];
+				var totalImage = imageToLoad.length;
+				var loaded = 0
+				for (var i = 0;i<totalImage;i++) {
+					var img = new Image();
+					img.src = imageToLoad[i];
+					imageLoad.push(img);
+					img.onload = function() {
+						loaded++
+						if (loaded == totalImage) {
+							doorL = imageLoad[13]
+							doorR = imageLoad[14]
+							wall = imageLoad[1]
+							brickVine = imageLoad[2]
+							tree = imageLoad[5]
+							tree_block = imageLoad[3]
+							harold = imageLoad[6]
+							piece_dArt = imageLoad[7]
+							ufo = imageLoad[8]
+							saul = imageLoad[9]
+							cad = imageLoad[10]
+							chad = imageLoad[11]
+							ww = imageLoad[12]
+							flopy = imageLoad[15]
+							
+							p = new prop(2,4,imageLoad[4])
+							pt = new prop(5,4,imageLoad[5])
+							pt.size = [800,200]
+							map = [
+								   [0,[1,wall],[1,doorL,"https://smashthewalls.com/","door"],[1,doorR,"https://smashthewalls.com/","door"],[1,wall],0],
+								   [[1,wall],0,0,0,0,[1,wall]],
+								   [[1,cad],0,0,0,0,[1,saul]],
+								   [[1,wall],0,0,0,0,[1,wall]],
+								   [[1,harold],0,0,0,0,[1,flopy]],
+								   [[1,wall],0,0,0,0,[1,wall]],
+								   [0,[1,wall],0,0,[1,wall],0],
+								   [[1,wall],0,0,0,0,[1,wall]],
+								   [[1,ufo],0,0,0,0,[1,piece_dArt]],
+								   [[1,wall],0,0,0,0,[1,wall]],
+								   [[1,chad],0,0,0,0,[1,ww]],
+								   [[1,wall],0,0,0,0,[1,wall]],
+								   [[1,wall],[1,wall],[1,wall],[1,wall],[1,wall],[1,wall]]]
+							gameLoop();
+						}
+					}	
+				}
+			}
+		</script>
+	</body>
+</html>
