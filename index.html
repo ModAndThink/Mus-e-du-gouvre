@@ -209,7 +209,15 @@
 			
 			function init() {
 				ctx.imageSmoothingEnabled = false;
-				
+				document.addEventListener('touchstart', (e) => {
+                                        let touch = e.touches[0];
+                                        x = touch.clientX;
+                                        y = touch.clientY;
+
+					if (x<0) {
+						camera_direction-=sensibility;
+					}
+                                })
 				document.addEventListener("keydown", function(event) {
 					if (event.keyCode == 90) {
 						z_press = true;
